@@ -1,0 +1,108 @@
+#+title: sicp模块化、对象和状态
+#+date: [2025-12-08 一 20:32]
+#+filetags: :sicp:
+#+identifier: 20251208T203215
+
+* 3.1赋值和局部状态
+如果一个模型是模块化的，它就应该分解成一些计算对象，他们分别模拟系统中的一些实际对象。每一个计算对象必须有自己的一组 ~局部状态变量~ ，描述该对象的实际状态。特别的，如果我们希望用程序设计语言里常规的符号命名模拟状态变量，语言就必须提供 ~赋值操作~ ，是我们能用它修改名字的关联值。
+** 3.1.1 局部状态变量
+我们的语言除了允许以关键词 ~const~ 开头的常量声明以外，还需要引入 ~变量声明~ ,这种声明以关键词 ~let~ 开头。
+
+例如：
+#+BEGIN_SRC javascript
+let balance = 100
+#+END_SRC
+
+与用 ~let~ 声明的名字一样，函数参数也是变量。
+
+例如：
+#+BEGIN_SRC javascript
+function make_withdraw(balance) {
+    return (amount) => {
+		if (balance >= amount) {
+			balance = balance - amount;
+			return balance;
+		} else {
+			return "Insufficient funds";
+		}
+	};
+}
+#+END_SRC
+这里的 ~balance~ 也是一个变量。
+
+** 3.1.2 引进赋值带来的利益
+通过引进赋值并把状态隐藏在局部变量中的技术，我们能以更模块化的方式遍历系统。
+** 3.1.3 引进赋值的代价
+不使用任何赋值的程序设计，称为 ~函数式程序设计~
+
+*** 引进赋值破坏了引用透明性
+来看下面这两个函数：
+#+BEGIN_SRC javascript
+function make_simplified_withdraw(balance) {
+    return amount => {
+               balance = balance - amount;
+               return balance;
+           };
+}
+#+END_SRC
+#+BEGIN_SRC javascript
+function make_decrementer(balance) {
+    return amount => balance - amount;
+}
+#+END_SRC
+第一个函数引入了赋值，第二个函数则没有引入赋值。
+
+这两个函数的作用是完全不同的。
+假设，我们有
+#+BEGIN_SRC javascript
+const W = make_simplified_withdraw(25)
+const D = make_decrementer(25)  
+#+END_SRC
+这里的W和D便截然不同
+#+BEGIN_SRC javascript
+W(20);
+5
+W(10);
+-5 
+#+END_SRC
+#+BEGIN_SRC javascript
+D(20);
+5
+D(10);
+15 
+#+END_SRC
+我们可以用代换模型解释 make_decrementer 的工作
+
+#+BEGIN_SRC javascript
+make_decrementer(25)(20)
+#+END_SRC
+#+BEGIN_SRC javascript
+(amount => 25 - amount)(20)
+#+END_SRC
+
+但我们却不能对 make_simplified_withdraw 使用代换模型
+#+BEGIN_SRC javascript
+(amount => {
+     balance = 25 - amount; 
+     return 25;
+ })(20)
+#+END_SRC
+#+BEGIN_SRC javascript
+balance = 25 - 20;
+return 25;
+#+END_SRC
+这显然错得有点可笑。
+
+如果一个语言支持在任何表达式里“相同的东西可以互相替换”，这样替换不会改变该表达式的值，这个语言就成为具有 ~引用透明性~ 。
+我们在计算机语言中引入赋值后，便破坏了引用透明性，使确定能否通过等价表达式的代换的方法简化表达式成为了一个复杂的问题。
+正因此，对使用赋值的程序作推理也会成为一个复杂的问题。
+
+*** 命令式程序设计的缺陷
+与函数式程序设计对应，广泛使用赋值的程序设计被称为 ~命令式程序设计~
+
+一般而言，使用赋值的程序设计迫使我们去考虑赋值前后的问题，以保证每个语句用的都是被修改变量的正确版本。这类问题不会出现在函数式程序里。
+如果我们考虑存在多个并发执行的进程的应用程序，命令式程序设计的复杂性还会更糟。
+* 3.2 求值的环境模型
+在我们的求值模型里，一个名字必须以某种方式指定一个“位置”，在那里可以储存值，这种位置维持在一种称为 ~环境~ 的结构里。
+[[~/org/denote/s]]
+* 3.3 用变动数据建模
