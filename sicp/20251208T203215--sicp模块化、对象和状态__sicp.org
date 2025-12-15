@@ -1,3 +1,4 @@
+
 #+title: sicp模块化、对象和状态
 #+date: [2025-12-08 一 20:32]
 #+filetags: :sicp:
@@ -156,7 +157,102 @@ function f(a) {
 } 
 #+end_src
 如下图：
+下图描绘了在程序环境中对 ~f~ ~squaare~ ~sum_of_squares~ 的声明的求值完成时创建的三个函数对象，每个对象由一些代码和一个指向环境的指针构成。
 [[./sicp_pic/sicp3.2.2-p3.4.png]]
+
+下图描绘的是求值 ~f(5)~ 时创建的环境结构。可以看到，每当我们把实参应用于函数时，都会创建一个新的框架
+这里的重点是，对square的每个调用都会创建一个新的框架，这告诉我们，每当实参应用于函数时，都会创造一个新的框架，即便它们应用于同一个函数。通过创建不同的框架，我们才能够做到维持所有名字为x的局部变量不相同。
 [[./sicp_pic/sicp3.2.2-p3.5.png]]
 
+** 3.2.3 框架作为局部状态的仓库
+有以下代码：
+#+begin_src javascript
+function make_withdraw(balance) {
+    return amount => {
+               if (balance >= amount) {
+                   balance = balance - amount;
+                   return balance;
+               } else {
+                   return "insufficient funds";
+               }
+           };
+} 
+#+end_src
+#+begin_src javascript
+const W1 = make_withdraw(100); 
+#+end_src
+#+begin_src javascript
+W1(50); 
+50
+#+end_src
+
+如下图，描绘了在程序里声明 make_withdraw函数的结果。
+[[./sicp_pic/sicp3.2.3-p3.6.png]]
+
+这个计算和以往的不同之处会出现在把函数 make_withdraw 应用于参数的时候
+#+begin_src javascript
+const W1 = make_withdraw(100); 
+#+end_src
+和以往一样，我们会在把实参100应用于函数 make_withdraw 时设置环境E1,其中形参balance约束到实参100,并在这个环境里求值 make_withdraw 的体，也就是那个返回语句，即一个lambda表达式。求值该lambda表达式会构造出一个新的函数对象，其代码来自lambda表达式，而其环境是E1,并不是程序环境。这个函数对象是调用 make_withdraw 的返回值，它在程序环境里约束于W1,因为对常量声明的求值本身实在程序环境里进行的。
+下图显示了这些处理完成后得到的环境结构
+[[./sicp_pic/sicp3.2.3-p3.7.png]]
+
+接下来分析把W1应用于一个实参时出现的情况：
+#+begin_src javascript
+W1(50); 
+50
+#+end_src
+同样的，把函数应用于实参时应该要创建新的框架，将W1的形式参数amount在其中约束到实参50。这里的关键点是：这个框架的外围环境不是程序环境，而是环境E1,因为它才是函数对象W1指定的环境。
+
+得到的环境如下图所示:
+[[./sicp_pic/sicp3.2.3-p3.8.png]]
+
+执行赋值就修改了balance在E1的约束。在对W1的调用完成时balance的值是50,而且包含着这个balance的框架仍然被W1的函数对象约束着。约束amount的那个框架则无关紧要了，构造它的函数调用已经结束，环境中任何部分都不包含指向该框架的指针了。下一次W1被调用时，这个函数又会构造一个新框架，在其中建立amount的新的约束。
+
+下图是调用W1后得到情景：
+[[./sicp_pic/sicp3.2.3-p3.9.png]]
+
+接下来看一下再次调用 make_withdraw创建第二个对象会出现什么。
+#+begin_src javascript
+const W2 = make_withdraw(100); 
+#+end_src
+
+这个语句产生的环境结构当如下图所示，其中的W2也是一个函数对象，也就是说，是一些代码和一个环境的序对，它包含一个框架，其中有它自己对balance的局部约束。另一方面，W1和W2的代码相同，也就是 make_withdraw 体内那个lambda表达式的代码。在这里我们看到了为什么W1和W2是行为上完全独立的两个对象。调用W1引用的是E1对象中的balance,W2则是E2对象中的balance
+[[./sicp_pic/sicp3.2.3-p3.10.png]]
+** 3.2.4 内部定义
+这一节，将讨论包含声明的函数体或其他块结构（例如条件语句的分支）的求值问题。每个块结构为块中声明的名字开辟了一个新作用域。为了在给定的环境中求值块结构，我们需要扩充这个环境，增加一个框架，其中包含所有直接在这个块体里（也就是说，在其内部嵌套的块之外）声明得到名字，然后在这个新环境中求值块体。
+
+有下面的代码
+#+begin_src javascript
+function sqrt(x) {
+    function is_good_enough(guess) {
+        return abs(square(guess) - x) < 0.001;
+    }
+    function improve(guess) {
+        return average(guess, x / guess);
+    }
+    function sqrt_iter(guess){
+        return is_good_enough(guess)
+               ? guess
+               : sqrt_iter(improve(guess));
+    }
+    return sqrt_iter(1);
+} 
+#+end_src
+
+如下图（该图像为了简洁，只画了约束于 is_good_enough 的函数对象）：
+观察这个环境结构。名字sqrt在程序环境里约束到一个函数对象，与之关联的就是程序环境。sqrt被调用时生成一个新环境E1,作为程序环境的下属，参数x在其中约束到2。然后sqrt的体在E1里求值。这个函数体是一个块，其中包含局部的函数声明。因此E1就会被扩充，为求值块里的代码创造一个新框架，由此得到新环境E2。下一步就是在E2里求值这个块里的代码。块体里需要求值的第一个语句是：
+#+begin_src javascript
+function is_good_enough(guess) {
+    return abs(square(guess) - x) < 0.001;
+}
+#+end_src
+求值这个声明在环境E2里创建函数 is_good_enough 。improve 和 sqrt_iter 也类似。
+
+定义好各个局部函数之后，现在要求值表达式 sqrt_iter(1) ，还是在环境E2中。这个调用创建了另一个新环境 E3，其中 sqrt_iter 的形参guess约束到1。函数 sqrt_iter 转而以 guess 的值作为实参调用 is_good_enough ，这是创建了另一个E4,（is_good_enough的形参）guess在该环境里约束到1。虽然 sqrt_iter 和 is_good_enough 都有名字作为guess的形参，但它们是两个不同的局部变量，位于不同的框架里。还有，E3和E4都以E2作为其外围环境，这是因为函数 sqrt_iter 和 is_good_enough 都以E2作为自己的定义环境。这种情况造成的一个后果就是，出现在 is_good_enough 体内部的名字x将引用出现在E1里的x约束
+[[./sicp_pic/sicp3.2.4-p3.11.png]]
+
+局部函数声明是程序模块化的有用技术，环境模型解释了这种技术所具有的两个关键性质。
+- 局部函数的名字不会与包含它们的函数之外的名字互相干扰，这是因为这些局部函数名都是在该函数求值时创建的框架里约束的，而不是在程序环境里约束的。
+- 局部函数可以访问包含着它们的函数的参数（以及在那里局部声明的变量和常量）。如果希望这样，只需将相应的形参的名字作为自由名字。这是因为，对局部函数的体求值时所使用的环境是其外围函数求值时所用的环境的下属
 * 3.3 用变动数据建模
