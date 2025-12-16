@@ -1,4 +1,3 @@
-
 #+title: sicp模块化、对象和状态
 #+date: [2025-12-08 一 20:32]
 #+filetags: :sicp:
@@ -256,3 +255,130 @@ function is_good_enough(guess) {
 - 局部函数的名字不会与包含它们的函数之外的名字互相干扰，这是因为这些局部函数名都是在该函数求值时创建的框架里约束的，而不是在程序环境里约束的。
 - 局部函数可以访问包含着它们的函数的参数（以及在那里局部声明的变量和常量）。如果希望这样，只需将相应的形参的名字作为自由名字。这是因为，对局部函数的体求值时所使用的环境是其外围函数求值时所用的环境的下属
 * 3.3 用变动数据建模
+在sicp的第二章，介绍了数据抽象的系统方法，按这种方法，数据结构应该用构造函数（用于创建数据对象）和选择函数（用于访问复合数据对象中的部分）描述。
+但是，为了模拟不断变化的复合对象，我们设计的数据抽象不但要包含选择函数和构造函数，还应包含一种 *变动函数* ，用于修改相应的数据对象。定义了变动函数的数据对象称为 *可变数据对象*
+** 3.3.1 可变的表结构
+在sicp的第二章，介绍了序对这一数据结构。
+这里介绍了操作序对的基本变动函数 ~set_head~ 和 ~set_tail~
+~set_head~ 要求两个参数，其第一个参数必须是序对。 ~set_head~ 修改这个序对，把它的head指针替换为指向 set_head 的第二个参数的指针。
+
+例子如下：x约束到表list(list("a", "b"), "c", "d")，y约束到list("e", "f")。
+求值函数 set_head(x, y)的操作结果如下图所示，它将修改x约束的那个序对，把它的head用y值取代。
+此时的x等价于 list(list("e", "f"), "c", "d")
+[[./sicp_pic/sicp3.3.1-p3.12.png]]
+[[./sicp_pic/sicp3.3.1-p3.13.png]]
+
+下面展示的是执行 ~const z = pair(y, tail(x));~ 的结果。执行该操作后，名字z约束到了由pair操作创建的一个新序对，而x的约束没有改变
+[[./sicp_pic/sicp3.3.1-p3.14.png]]
+
+~set_tail~ 操作与 ~set_head~ 类似，不同点在于它只对tail指针工作。对最开始的例子使用 ~set_tail(x, y)~ 其结果当如下图所示
+[[./sicp_pic/sicp3.3.1-p3.15.png]]
+
+pair也可以用一两个变动函数和一个返回新序对的函数 get_new_pair 实现，这里得到的新序对不是任何表结构的组成部分。
+#+begin_src javascript
+function pair(x, y) {
+    const fresh = get_new_pair();
+    set_head(fresh, x);
+    set_tail(fresh, y);
+    return fresh;
+} 
+#+end_src
+** 3.3.2 队列的表示
+这一节将展示如何使用序列表示一种称为队列的结构
+
+队列是我们所熟知的一种“FIFO”的结构
+队列操作如下图所示：
+[[./sicp_pic/sicp3.3.2-p3.18.png]]
+
+依照数据抽象的说法，队列可以看作是由下面一组操作定义的结构：
+- 一个构造函数：
+#+begin_src javascript
+make_queue()
+#+end_src
+它返回一个空队列（不包含数据项的队列）
+- 一个谓词
+#+begin_src javascript
+is_empty_queue(queue)
+#+end_src
+检查队列queue是否为空
+- 一个选择函数
+#+begin_src javascript
+front_queue(queue)
+#+end_src
+返回队列前端queue的对象，如果为空则报错。它不修改队列。
+- 两个变动函数
+#+begin_src javascript
+insert_queue(queue, item)
+#+end_src
+将数据项item插入队列queue的尾端，返回修改过的队列的值
+#+begin_src javascript
+delete_queue(queue)
+#+end_src
+删除队列queue前端的数据项并返回修改后的队列的值。如果queue为空则报错
+
+我们可以把队列视作一个常规的表。对列前端就是表的head,向队列中插入项就是把项附到表的最后，而从队列里删除项就是取表的tail。但是这种做法非常低效，为了插入项，我们必须扫描表达到表尾。扫描表只能进行一系列tail操作，对n个项的表，这种扫描就要进行 theta(n) 步 。不过，可以通过修改一下表的表示方式，使各种队列操作只需要 theta(1) 步。
+
+修改的方法是仍然将队列表示为表，但增加一个指向表中最后序对的指针。这样插入项时就可以通过表尾指针，避免了对表的扫描。
+这样，一个队列将用指针 front_ptr 和 reaar_ptr 表示，它们分别指向一个常规表中的第一个和最后一个序对。
+因为我们希望队列成为可标识对象，所以我们用pair组合这两个指针。这样，队列本身就是两个指针的pair。
+如下图所示：
+[[./sicp_pic/sicp3.3.2-p3.19.png]]
+
+为了实现队列操作，我们先声明以下函数，它们使我们可以选择和修改队列的前端和尾端指针。
+#+begin_src javascript
+function front_ptr(queue) { return head(queue); }
+
+function rear_ptr(queue) { return tail(queue); }
+
+function set_front_ptr(queue, item) { set_head(queue, item); }
+
+function set_rear_ptr(queue, item) { set_tail(queue, item); } 
+#+end_src
+接下来的代码都很好理解
+#+begin_src javascript
+function is_empty_queue(queue) { return is_null(front_ptr(queue)); } 
+#+end_src
+如果一个队列的前端指针是空表，我们就认为这个队列是空的。
+
+#+begin_src javascript
+function make_queue() { return pair(null, null); } 
+#+end_src
+make_queue返回一个空队列，也就是一个序对，其head和tail都是空表
+
+#+begin_src javascript
+function front_queue(queue) {
+    return is_empty_queue(queue)
+           ? error(queue, "front_queue called with an empty queue")
+           : head(front_ptr(queue));
+} 
+#+end_src
+选取队列的前端项时，我们返回由前端指针指向的序对的head
+
+向队列中插入一个项的时，我们参考下图所示的方法
+#+begin_src javascript
+function insert_queue(queue, item) {
+    const new_pair = pair(item, null);
+    if (is_empty_queue(queue)) {
+        set_front_ptr(queue, new_pair);
+        set_rear_ptr(queue, new_pair);
+    } else {
+        set_tail(rear_ptr(queue), new_pair);
+        set_rear_ptr(queue, new_pair);
+    }
+    return queue;
+} 
+#+end_src
+[[./sicp_pic/sicp3.3.2-p3.20.png]]
+
+#+begin_src javascript
+function delete_queue(queue) {
+    if (is_empty_queue(queue)) {
+        error(queue, "delete_queue called with an empty queue");
+    } else {
+        set_front_ptr(queue, tail(front_ptr(queue)));
+        return queue;
+    }
+} 
+#+end_src
+在队列中删除项的方法，可以参考下图：
+[[./sicp_pic/sicp3.3.2-p3.21.png]]
