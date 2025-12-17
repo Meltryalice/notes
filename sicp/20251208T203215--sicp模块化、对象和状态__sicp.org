@@ -204,11 +204,13 @@ W1(50);
 同样的，把函数应用于实参时应该要创建新的框架，将W1的形式参数amount在其中约束到实参50。这里的关键点是：这个框架的外围环境不是程序环境，而是环境E1,因为它才是函数对象W1指定的环境。
 
 得到的环境如下图所示:
+
 [[./sicp_pic/sicp3.2.3-p3.8.png]]
 
 执行赋值就修改了balance在E1的约束。在对W1的调用完成时balance的值是50,而且包含着这个balance的框架仍然被W1的函数对象约束着。约束amount的那个框架则无关紧要了，构造它的函数调用已经结束，环境中任何部分都不包含指向该框架的指针了。下一次W1被调用时，这个函数又会构造一个新框架，在其中建立amount的新的约束。
 
 下图是调用W1后得到情景：
+
 [[./sicp_pic/sicp3.2.3-p3.9.png]]
 
 接下来看一下再次调用 make_withdraw创建第二个对象会出现什么。
@@ -382,3 +384,87 @@ function delete_queue(queue) {
 #+end_src
 在队列中删除项的方法，可以参考下图：
 [[./sicp_pic/sicp3.3.2-p3.21.png]]
+
+补充：
+有关 front_ptr(queue) 的值一直在改变，尽管看起来 insert_queue 的代码在对列不为空之后再也没有修改过它。然而，要知道，最开始对 set_front_ptr 和 set_rear_ptr 函数执行时，它们实际上是同一个 pair 所以后来对 set_tail 的执行，实际上也修改了 front_ptr(queue) 因为它们在环境中绑定的是同一个 pair
+#+begin_src javascript
+function insert_queue(queue, item) {
+    const new_pair = pair(item, null);
+    if (is_empty_queue(queue)) {
+        set_front_ptr(queue, new_pair);
+        set_rear_ptr(queue, new_pair);
+    } else {
+        set_tail(rear_ptr(queue), new_pair);
+        set_rear_ptr(queue, new_pair);
+    }
+    return queue;
+} 
+#+end_src
+** 3.3.3 表格的表示
+*** 一维表格
+我们先考虑一维表格，这种表格里的每一个值保存在一个关键码之下。
+我们要把这种表格实现为记录的表，每个记录实现为由关键码和其关联值组成的序对。我们用记录把序对连接起来构成表，让这些序对的head指针指向顺序的各个记录。作为连接结构的那些序对称为表格的 *骨架* 。为了在给表格里加入记录时总有可以修改的位置，我们把这种表格构造为一种带 *带表头的表* 。这种表开头由一个特殊的骨架序对，其中保存一个哑记录————我们存入一个任意选定的字符串 ="**table**"=
+#+begin_src
+a: 1
+b: 2
+c: 3
+#+end_src
+
+下图为该表格的盒子指针图：
+[[./sicp_pic/sicp3.3.3-p3.22.png]]
+
+下面是构造表格的相关代码
+#+begin_src javascript
+function lookup(key, table) {
+    const record = assoc(key, tail(table));
+    return is_undefined(record)
+           ? undefined
+           : tail(record);
+}
+function assoc(key, records) {
+    return is_null(records)
+           ? undefined
+           : equal(key, head(head(records)))
+           ? head(records)
+           : assoc(key, tail(records));
+} 
+#+end_src
+关于为什么是 ~assoc(key, tail(table));~ 是因为assoc不应该查看表格的哑记录，那是没有意义的。
+这样， lookup 函数就实现了表格的查找功能。
+
+下面是表的插入功能
+#+begin_src javascript
+function insert(key, value, table) {
+    const record = assoc(key, tail(table));
+    if (is_undefined(record)) {
+        set_tail(table,
+                 pair(pair(key, value), tail(table)));
+    } else {
+        set_tail(record, value);
+    }
+    return "ok";
+} 
+#+end_src
+如果没有关键码和相关值，则创造一个新记录，如果已经存在具有这个关键码的记录，就把该记录的tail设为新值。
+
+构造表格时，只需要创建一个包含字符串 ="**table**"= 的表。
+#+begin_src javascript
+function make_table() {
+    return list("*table*");
+} 
+#+end_src
+
+*** 二维表格
+下面是一个二维表格的实例：
+#+BEGIN_SRC
+"math":
+    "+":  43
+    "-":  45
+    "*":  42
+"letters":
+    "a":  97
+    "b":  98
+#+end_src
+
+下面的是盒子指针图：
+[[./sicp_pic/sicp3.3.3-p3.23.png]]
